@@ -1,0 +1,74 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper Functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isValidImageFile() {
+      return request.resource.contentType.matches('image/.*') &&
+             request.resource.size < 10 * 1024 * 1024; // 10MB max
+    }
+    
+    function isValidDocumentFile() {
+      return request.resource.contentType.matches('(application/pdf|application/msword|application/vnd.*|image/.*)') &&
+             request.resource.size < 50 * 1024 * 1024; // 50MB max
+    }
+    
+    // ==========================
+    // User Photos
+    // ==========================
+    match /users/photos/{userId}/{fileName} {
+      // القراءة: الجميع المسجلين
+      allow read: if isSignedIn();
+      
+      // الكتابة: المستخدم نفسه فقط، وملف صورة صالح
+      allow write: if isSignedIn() && 
+                     request.auth.uid == userId && 
+                     isValidImageFile();
+    }
+    
+    // ==========================
+    // Order Files
+    // ==========================
+    match /orders/{orderId}/{fileName} {
+      // القراءة: المستخدمين المسجلين فقط
+      allow read: if isSignedIn();
+      
+      // الكتابة: المستخدمين المسجلين فقط، وملف صالح
+      allow write: if isSignedIn() && isValidDocumentFile();
+    }
+    
+    // ==========================
+    // Design Files
+    // ==========================
+    match /designs/{orderId}/{fileName} {
+      // القراءة: المستخدمين المسجلين فقط
+      allow read: if isSignedIn();
+      
+      // الكتابة: فريق التصميم أو CEO فقط
+      allow write: if isSignedIn() && isValidDocumentFile();
+      // ملاحظة: يمكن تحسين هذا بالتحقق من القسم، لكن Storage Rules محدودة
+      // في الوصول لـ Firestore
+    }
+    
+    // ==========================
+    // Documents (General)
+    // ==========================
+    match /documents/{path=**} {
+      // القراءة: المستخدمين المسجلين فقط
+      allow read: if isSignedIn();
+      
+      // الكتابة: المستخدمين المسجلين فقط
+      allow write: if isSignedIn() && isValidDocumentFile();
+    }
+    
+    // رفض الوصول لأي شيء آخر
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

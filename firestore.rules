@@ -1,0 +1,243 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==========================
+    // Helper Functions
+    // ==========================
+    
+    // التحقق من تسجيل الدخول
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // التحقق من أن المستخدم نشط
+    function isActiveUser() {
+      return isSignedIn() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true;
+    }
+    
+    // الحصول على بيانات المستخدم الحالي
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // التحقق من الدور
+    function hasRole(role) {
+      return isActiveUser() && getUserData().role == role;
+    }
+    
+    // التحقق من القسم
+    function hasDepartment(department) {
+      return isActiveUser() && getUserData().department == department;
+    }
+    
+    // التحقق من أن المستخدم رئيس قسم
+    function isHead() {
+      return isActiveUser() && getUserData().isHead == true;
+    }
+    
+    // التحقق من أن المستخدم CEO
+    function isCEO() {
+      return hasRole('ceo');
+    }
+    
+    // التحقق من أن المستخدم في قسم المبيعات
+    function isSales() {
+      return hasDepartment('sales');
+    }
+    
+    // التحقق من أن المستخدم مالك المورد
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // ==========================
+    // Users Collection
+    // ==========================
+    match /users/{userId} {
+      // القراءة: المستخدم يمكنه قراءة بياناته، أو CEO يمكنه قراءة الجميع
+      allow read: if isOwner(userId) || isCEO();
+      
+      // الإنشاء: 
+      // - السماح بإنشاء مستخدم إذا كان المستخدم الذي يتم إنشاؤه هو نفس المستخدم المسجل (self-registration)
+      // - أو إذا كان المستخدم الحالي CEO
+      allow create: if (isSignedIn() && request.auth.uid == userId) || isCEO();
+      
+      // التحديث: المستخدم يمكنه تحديث بياناته الأساسية، CEO يمكنه تحديث أي شيء
+      allow update: if (isOwner(userId) && 
+                       // لا يمكن تغيير الدور أو القسم
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'department', 'isHead', 'isActive'])
+                      ) || isCEO();
+      
+      // الحذف: CEO فقط
+      allow delete: if isCEO();
+    }
+    
+    // ==========================
+    // Orders Collection
+    // ==========================
+    match /orders/{orderId} {
+      // القراءة:
+      // - CEO: يمكنه رؤية كل الطلبات
+      // - رؤساء الأقسام: يمكنهم رؤية كل الطلبات
+      // - الموظفين: يمكنهم رؤية طلبات قسمهم فقط
+      allow read: if isActiveUser() && (
+        isCEO() || 
+        isHead() ||
+        // المبيعات يرون طلباتهم
+        (isSales() && resource.data.createdBy == request.auth.uid) ||
+        // الأقسام الأخرى ترى الطلبات المرتبطة بقسمها
+        (hasDepartment('design') && resource.data.status in [
+          'pending_design', 'in_design', 'design_review', 'design_completed'
+        ]) ||
+        (hasDepartment('printing') && resource.data.status in [
+          'pending_printing', 'in_printing', 'printing_completed'
+        ]) ||
+        (hasDepartment('accounting') && (
+          resource.data.status in ['pending_payment', 'payment_confirmed'] ||
+          // قسم الحسابات يمكنه رؤية طلبات عروض الأسعار في أي حالة
+          resource.data.isQuotation == true
+        )) ||
+        (hasDepartment('dispatch') && (
+          resource.data.status in [
+            'pending_materials', 'materials_in_progress', 'materials_ready',
+            'ready_for_dispatch', 'in_dispatch', 'delivered'
+          ]
+        ))
+      );
+      
+      // الإنشاء: المبيعات فقط
+      allow create: if isSales() && 
+                      request.resource.data.createdBy == request.auth.uid &&
+                      request.resource.data.status in ['draft', 'pending_ceo_review'];
+      
+      // التحديث:
+      // - CEO: يمكنه تحديث أي طلب
+      // - رؤساء الأقسام: يمكنهم تحديث أي طلب
+      // - جميع الأقسام: يمكنهم تحديث الطلبات المرتبطة بهم
+      allow update: if isActiveUser();
+      
+      // الحذف: CEO فقط
+      allow delete: if isCEO();
+    }
+    
+    // ==========================
+    // Notifications Collection
+    // ==========================
+    match /notifications/{notificationId} {
+      // القراءة: المستخدم يمكنه قراءة إشعاراته فقط
+      allow read: if isSignedIn() && resource.data.recipientId == request.auth.uid;
+      
+      // الإنشاء: المستخدمين النشطين يمكنهم إنشاء إشعارات
+      // (للإشعارات المباشرة مثل الموافقات)
+      allow create: if isActiveUser() && 
+                      request.resource.data.recipientId != null;
+      
+      // التحديث: المستخدم يمكنه تحديث حالة القراءة لإشعاراته
+      allow update: if isSignedIn() && 
+                      resource.data.recipientId == request.auth.uid &&
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt']);
+      
+      // الحذف: المستخدم يمكنه حذف إشعاراته
+      allow delete: if isSignedIn() && resource.data.recipientId == request.auth.uid;
+    }
+    
+    // ==========================
+    // Quotations Collection
+    // ==========================
+    match /quotations/{quotationId} {
+      // القراءة:
+      // - CEO: يمكنه رؤية جميع عروض الأسعار
+      // - قسم الحسابات: يمكنهم رؤية جميع عروض الأسعار
+      // - المبيعات: يمكنهم رؤية جميع عروض الأسعار (لطلباتهم)
+      // - رؤساء الأقسام: يمكنهم رؤية جميع عروض الأسعار
+      allow read: if isActiveUser() && (
+        isCEO() ||
+        isHead() ||
+        hasDepartment('accounting') ||
+        hasDepartment('sales')
+      );
+      
+      // الإنشاء: قسم الحسابات فقط
+      allow create: if hasDepartment('accounting') &&
+                      request.resource.data.preparedBy == request.auth.uid &&
+                      request.resource.data.status in ['quotation_draft', 'quotation_pending_approval'];
+      
+      // التحديث:
+      // - CEO: يمكنه الموافقة أو الرفض
+      // - قسم الحسابات: يمكنهم تحديث عروض الأسعار التي أعدوها
+      allow update: if isActiveUser() && (
+        // CEO يمكنه تحديث أي عرض سعر (للموافقة/الرفض)
+        isCEO() ||
+        // قسم الحسابات يمكنهم تحديث عروض الأسعار
+        (hasDepartment('accounting') && (
+          resource.data.preparedBy == request.auth.uid ||
+          isHead()
+        ))
+      );
+      
+      // الحذف: CEO أو من أعده
+      allow delete: if isCEO() || 
+                      (hasDepartment('accounting') && resource.data.preparedBy == request.auth.uid);
+    }
+    
+    // ==========================
+    // Invoices Collection
+    // ==========================
+    match /invoices/{invoiceId} {
+      // القراءة: نفس صلاحيات عروض الأسعار
+      allow read: if isActiveUser() && (
+        isCEO() ||
+        hasDepartment('accounting') ||
+        (isSales() && exists(/databases/$(database)/documents/orders/$(resource.data.relatedOrderId)) &&
+         get(/databases/$(database)/documents/orders/$(resource.data.relatedOrderId)).data.createdBy == request.auth.uid)
+      );
+      
+      // الإنشاء: قسم الحسابات فقط
+      allow create: if hasDepartment('accounting') &&
+                      request.resource.data.preparedBy == request.auth.uid;
+      
+      // التحديث: قسم الحسابات أو CEO
+      allow update: if isActiveUser() && (
+        isCEO() ||
+        (hasDepartment('accounting') && (
+          resource.data.preparedBy == request.auth.uid ||
+          isHead()
+        ))
+      );
+      
+      // الحذف: CEO فقط
+      allow delete: if isCEO();
+    }
+    
+    // ==========================
+    // Counters Collection
+    // ==========================
+    match /counters/{counterId} {
+      // القراءة: المستخدمين المسجلين فقط
+      allow read: if isSignedIn();
+      
+      // الكتابة: السماح للمستخدمين المسجلين بتحديث العدادات
+      // يتم استخدام Transactions لضمان عدم التعارض
+      allow write: if isSignedIn();
+    }
+    
+    // ==========================
+    // Activity Logs Collection
+    // ==========================
+    match /activity_logs/{logId} {
+      // القراءة: CEO ورؤساء الأقسام فقط
+      allow read: if isCEO() || isHead();
+      
+      // الكتابة: عبر Cloud Functions فقط
+      allow write: if false;
+    }
+    
+    // رفض الوصول لأي شيء آخر
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

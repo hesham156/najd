@@ -1,0 +1,30 @@
+{
+  "name": "najd",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "functions",
+    "scripts"
+  ],
+  "description": "نظام إدارة داخلي متكامل لشركة نجد",
+  "scripts": {
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:mobile": "cd apps/mobile && npm start",
+    "dev:functions": "cd functions && npm run serve",
+    "build:web": "cd apps/web && npm run build",
+    "build:functions": "cd functions && npm run build",
+    "deploy:functions": "cd functions && npm run deploy",
+    "deploy:web": "cd apps/web && npm run build && firebase deploy --only hosting",
+    "create-user": "cd scripts && npm run create-user",
+    "create-ceo": "cd scripts && npm run create-ceo",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "type-check": "tsc --noEmit",
+    "install:all": "npm install && cd apps/web && npm install && cd ../mobile && npm install && cd ../../functions && npm install && cd ../scripts && npm install && cd ../packages/shared && npm install"
+  },
+  "keywords": ["najd", "internal", "management", "system"],
+  "author": "Najd Company",
+  "license": "PRIVATE"
+}
+

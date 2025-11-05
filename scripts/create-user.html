@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إنشاء مستخدم - نظام نجد</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .quick-create {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f4ff;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .quick-create button {
+            background: #4caf50;
+            margin-top: 10px;
+        }
+        
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .credentials {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 1px solid #ffc107;
+        }
+        
+        .credentials h3 {
+            margin-bottom: 10px;
+            color: #856404;
+        }
+        
+        .credentials p {
+            margin: 5px 0;
+            color: #856404;
+        }
+        
+        .credentials strong {
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 إنشاء مستخدم جديد</h1>
+        <p class="subtitle">نظام إدارة شركة نجد</p>
+        
+        <div class="quick-create">
+            <p><strong>إنشاء سريع:</strong> مستخدم CEO تجريبي</p>
+            <button onclick="createQuickCEO()">إنشاء CEO الآن ⚡</button>
+        </div>
+        
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #e0e0e0;">
+        
+        <form id="createUserForm">
+            <div class="form-group">
+                <label>البريد الإلكتروني *</label>
+                <input type="email" id="email" required placeholder="example@najd.com">
+            </div>
+            
+            <div class="form-group">
+                <label>كلمة المرور *</label>
+                <input type="password" id="password" required placeholder="6 أحرف على الأقل" minlength="6">
+            </div>
+            
+            <div class="form-group">
+                <label>الاسم الكامل *</label>
+                <input type="text" id="displayName" required placeholder="أدخل الاسم الكامل">
+            </div>
+            
+            <div class="form-group">
+                <label>رقم الهاتف</label>
+                <input type="tel" id="phoneNumber" placeholder="+966XXXXXXXXX">
+            </div>
+            
+            <div class="form-group">
+                <label>الدور *</label>
+                <select id="role" required>
+                    <option value="">اختر الدور</option>
+                    <option value="ceo,management,true">المدير التنفيذي (CEO)</option>
+                    <option value="sales,sales,false">موظف مبيعات</option>
+                    <option value="sales_head,sales,true">مدير المبيعات</option>
+                    <option value="design,design,false">مصمم</option>
+                    <option value="design_head,design,true">مدير التصميم</option>
+                    <option value="printing,printing,false">موظف طباعة</option>
+                    <option value="printing_head,printing,true">مدير الطباعة</option>
+                    <option value="accounting,accounting,false">محاسب</option>
+                    <option value="accounting_head,accounting,true">مدير الحسابات</option>
+                    <option value="dispatch,dispatch,false">موظف إرسال</option>
+                    <option value="dispatch_head,dispatch,true">مدير الإرسال</option>
+                </select>
+            </div>
+            
+            <button type="submit">إنشاء المستخدم</button>
+        </form>
+        
+        <div class="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px;">جاري الإنشاء...</p>
+        </div>
+        
+        <div class="message" id="message"></div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, createUserWithEmailAndPassword, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyA-ZRrKs-ELQlDDZTFPdo7BD4MeoZ2v_gY",
+            authDomain: "najd-5e7c7.firebaseapp.com",
+            projectId: "najd-5e7c7",
+            storageBucket: "najd-5e7c7.firebasestorage.app",
+            messagingSenderId: "193143900640",
+            appId: "1:193143900640:web:bdb4e1cc5b5c3a6cf78385"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Create Quick CEO
+        window.createQuickCEO = async function() {
+            const email = 'ceo@najd.com';
+            const password = 'Najd@2024';
+            const displayName = 'المدير التنفيذي';
+            const role = 'ceo';
+            const department = 'management';
+            const isHead = true;
+
+            await createUser(email, password, displayName, '', role, department, isHead);
+        };
+
+        // Create User Form
+        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const displayName = document.getElementById('displayName').value;
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            const roleData = document.getElementById('role').value.split(',');
+            const role = roleData[0];
+            const department = roleData[1];
+            const isHead = roleData[2] === 'true';
+
+            await createUser(email, password, displayName, phoneNumber, role, department, isHead);
+        });
+
+        // Create User Function
+        async function createUser(email, password, displayName, phoneNumber, role, department, isHead) {
+            const loading = document.querySelector('.loading');
+            const message = document.getElementById('message');
+            const form = document.getElementById('createUserForm');
+
+            try {
+                // Show loading
+                loading.style.display = 'block';
+                message.style.display = 'none';
+                form.style.display = 'none';
+
+                // 1. Create user in Authentication
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+
+                // 2. Update profile
+                await updateProfile(user, {
+                    displayName: displayName,
+                    ...(phoneNumber && { phoneNumber: phoneNumber })
+                });
+
+                // 3. Save user data to Firestore
+                const userData = {
+                    uid: user.uid,
+                    email: email,
+                    displayName: displayName,
+                    ...(phoneNumber && { phoneNumber: phoneNumber }),
+                    role: role,
+                    department: department,
+                    isHead: isHead,
+                    isActive: true,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                };
+
+                await setDoc(doc(db, 'users', user.uid), userData);
+
+                // Show success message
+                loading.style.display = 'none';
+                message.className = 'message success';
+                message.style.display = 'block';
+                message.innerHTML = `
+                    <h3>✅ تم إنشاء المستخدم بنجاح!</h3>
+                    <div class="credentials">
+                        <h3>معلومات الدخول:</h3>
+                        <p><strong>البريد الإلكتروني:</strong> ${email}</p>
+                        <p><strong>كلمة المرور:</strong> ${password}</p>
+                        <p><strong>الاسم:</strong> ${displayName}</p>
+                        <p><strong>الدور:</strong> ${role}</p>
+                        <p style="margin-top: 15px; font-size: 12px;">احفظ هذه المعلومات في مكان آمن!</p>
+                    </div>
+                    <button onclick="window.location.href='http://localhost:3000/login'" style="margin-top: 15px; background: #4caf50;">
+                        الذهاب لصفحة تسجيل الدخول →
+                    </button>
+                `;
+
+                // Sign out the created user
+                await auth.signOut();
+
+                console.log('User created successfully:', userData);
+
+            } catch (error) {
+                loading.style.display = 'none';
+                form.style.display = 'block';
+                message.className = 'message error';
+                message.style.display = 'block';
+
+                let errorMessage = 'حدث خطأ أثناء إنشاء المستخدم';
+
+                if (error.code === 'auth/email-already-in-use') {
+                    errorMessage = '❌ البريد الإلكتروني مستخدم بالفعل! يمكنك تسجيل الدخول مباشرة.';
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = '❌ البريد الإلكتروني غير صحيح';
+                } else if (error.code === 'auth/weak-password') {
+                    errorMessage = '❌ كلمة المرور ضعيفة (يجب أن تكون 6 أحرف على الأقل)';
+                } else if (error.code === 'permission-denied') {
+                    errorMessage = '❌ خطأ في الصلاحيات. تأكد من نشر Firestore Rules';
+                }
+
+                message.innerHTML = `<h3>${errorMessage}</h3><p style="margin-top: 10px; font-size: 12px;">${error.message}</p>`;
+                console.error('Error creating user:', error);
+            }
+        }
+    </script>
+</body>
+</html>
+
+

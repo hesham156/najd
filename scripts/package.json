@@ -1,0 +1,15 @@
+{
+  "name": "najd-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Helper scripts for Najd project",
+  "scripts": {
+    "create-user": "node create-user.js",
+    "create-ceo": "node create-user.js --quick"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}
+
+

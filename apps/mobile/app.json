@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "نجد - نظام الإدارة",
+    "slug": "najd-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0369a1"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.najd.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0369a1"
+      },
+      "package": "com.najd.mobile",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#0369a1"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "24c5e95d-8720-452a-ab7f-c51c923a1a03"
+      }
+    }
+  }
+}
