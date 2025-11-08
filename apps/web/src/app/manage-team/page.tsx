@@ -80,22 +80,22 @@ export default function ManageTeamPage() {
                                 department === 'dispatch' ? 'assignedToDispatch' : null;
 
         const memberTasks = orders.filter(o => o[assignmentField as keyof Order] === member.uid);
-        const activeTasks = memberTasks.filter(t => !t[`${department}Assignment`]?.completedAt);
-        const completedTasks = memberTasks.filter(t => t[`${department}Assignment`]?.completedAt);
+        const activeTasks = memberTasks.filter(t => !(t as any)[`${department}Assignment`]?.completedAt);
+        const completedTasks = memberTasks.filter(t => (t as any)[`${department}Assignment`]?.completedAt);
         
         // المكتملة اليوم
         const today = new Date().setHours(0, 0, 0, 0);
         const completedToday = completedTasks.filter(t => {
-          const completedAt = t[`${department}Assignment`]?.completedAt;
+          const completedAt = (t as any)[`${department}Assignment`]?.completedAt;
           if (!completedAt) return false;
           const taskDate = new Date(completedAt).setHours(0, 0, 0, 0);
           return today === taskDate;
         }).length;
 
         // متوسط وقت الإنجاز
-        const tasksWithDuration = completedTasks.filter(t => t[`${department}Assignment`]?.actualDuration);
+        const tasksWithDuration = completedTasks.filter(t => (t as any)[`${department}Assignment`]?.actualDuration);
         const avgTime = tasksWithDuration.length > 0
-          ? tasksWithDuration.reduce((sum, t) => sum + (t[`${department}Assignment`]?.actualDuration || 0), 0) / tasksWithDuration.length
+          ? tasksWithDuration.reduce((sum, t) => sum + ((t as any)[`${department}Assignment`]?.actualDuration || 0), 0) / tasksWithDuration.length
           : 0;
 
         // معدل الإنجاز
@@ -182,10 +182,10 @@ export default function ManageTeamPage() {
     assigned: assignedOrders.length,
     unassigned: unassignedOrders.length,
     inProgress: assignedOrders.filter(o => {
-      const assignment = o[`${department}Assignment`];
+      const assignment = (o as any)[`${department}Assignment`];
       return assignment?.startedAt && !assignment?.completedAt;
     }).length,
-    completed: assignedOrders.filter(o => o[`${department}Assignment`]?.completedAt).length,
+    completed: assignedOrders.filter(o => (o as any)[`${department}Assignment`]?.completedAt).length,
   };
 
   return (
@@ -407,7 +407,7 @@ export default function ManageTeamPage() {
             </h2>
             <div className="space-y-4">
               {assignedOrders.map((order) => {
-                const assignment = order[`${department}Assignment`];
+                const assignment = (order as any)[`${department}Assignment`];
                 const isStarted = assignment?.startedAt;
                 const isCompleted = assignment?.completedAt;
 

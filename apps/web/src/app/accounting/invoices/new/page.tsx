@@ -10,7 +10,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import Navbar from '@/components/Layout/Navbar';
 import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Invoice, InvoiceItem, Order } from '@/types/shared';
+import type { Order } from '@/types/shared';
+import { Invoice, InvoiceItem, InvoiceType, InvoiceStatus } from '@najd/shared';
 
 const TAX_RATE = 15; // 15% ضريبة القيمة المضافة في السعودية
 
@@ -181,10 +182,10 @@ export default function NewInvoicePage() {
       // توليد رقم الفاتورة (مؤقت - سيتم استبداله بـ Cloud Function)
       const invoiceNumber = `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
 
-      const invoiceData: Partial<Invoice> = {
+      const invoiceData: any = {
         invoiceNumber,
-        invoiceType: 'sales',
-        status: 'invoice_draft',
+        invoiceType: InvoiceType.SALES,
+        status: InvoiceStatus.DRAFT,
         
         // معلومات العميل
         customerName,

@@ -177,8 +177,8 @@ export function calculateInvoiceTotal(
   };
 }
 
-// دالة لحساب المبلغ المتبقي
-export function calculateRemainingAmount(totalAmount: number, paidAmount: number): number {
+// دالة لحساب المبلغ المتبقي في الفواتير
+export function calculateInvoiceRemainingAmount(totalAmount: number, paidAmount: number): number {
   return Math.max(0, totalAmount - paidAmount);
 }
 

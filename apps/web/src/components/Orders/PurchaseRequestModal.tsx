@@ -126,15 +126,9 @@ export default function PurchaseRequestModal({
       await notifyCEO({
         type: 'purchase_request',
         title: 'طلب شراء جديد',
-        message: `طلب شراء ${requestNumber} من ${user.displayName || 'موظف المبيعات'}`,
-        link: '/ceo-dashboard/purchase-requests',
+        message: `طلب شراء ${requestNumber} من ${user.displayName || 'موظف المبيعات'} - ${items.length} صنف - ${totalEstimatedCost.toLocaleString('ar-SA')} ر.س`,
+        actionUrl: '/ceo-dashboard/material-requests',
         priority,
-        data: {
-          requestNumber,
-          totalEstimatedCost,
-          itemsCount: items.length,
-          relatedOrderNumber,
-        },
       });
 
       toast.success('تم إنشاء طلب الشراء بنجاح');

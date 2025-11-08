@@ -264,9 +264,9 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
             </span>
             <span
               className="px-4 py-2 text-sm font-medium rounded-full text-white"
-              style={{ backgroundColor: getPriorityColor(order.priority) }}
+              style={{ backgroundColor: getPriorityColor(order.priority as any) }}
             >
-              {PRIORITY_LABELS[order.priority]}
+              {(PRIORITY_LABELS as any)[order.priority]}
             </span>
           </div>
         </div>
@@ -308,7 +308,7 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
                 <div>
                   <p className="text-sm text-gray-600">نوع الطباعة</p>
                   <p className="text-base font-medium text-gray-900">
-                    {PRINT_TYPE_LABELS[order.printType]}
+                    {(PRINT_TYPE_LABELS as any)[order.printType]}
                   </p>
                 </div>
                 <div>
@@ -324,7 +324,7 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
                 <div>
                   <p className="text-sm text-gray-600">حالة الدفع</p>
                   <p className="text-base font-medium text-gray-900">
-                    {PAYMENT_STATUS_LABELS[order.paymentStatus]}
+                    {(PAYMENT_STATUS_LABELS as any)[order.paymentStatus]}
                   </p>
                 </div>
                 {order.requestedDeliveryDate && (
@@ -360,7 +360,7 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
                   {order.materials.map((material, index) => (
                     <div key={index} className="border-r-4 border-najd-gold pr-4">
                       <p className="font-medium text-gray-900">
-                        {MATERIAL_TYPE_LABELS[material.type]}
+                        {(MATERIAL_TYPE_LABELS as any)[material.type]}
                       </p>
                       <p className="text-sm text-gray-600">الكمية: {material.quantity}</p>
                       {material.description && (

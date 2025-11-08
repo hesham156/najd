@@ -181,14 +181,12 @@ export default function DemoVoiceCall({
       // إيقاف بعد 1 ثانية وتكرار
       setTimeout(() => {
         try {
-          if (callStatus !== 'ongoing') {
-            oscillator.stop();
-            setTimeout(() => {
-              if (callStatus !== 'ongoing') {
-                playRingtone();
-              }
-            }, 1000);
-          }
+          oscillator.stop();
+          setTimeout(() => {
+            if (callStatus !== 'ended') {
+              playRingtone();
+            }
+          }, 1000);
         } catch (e) {
           console.warn('⚠️ خطأ في إيقاف oscillator:', e);
         }

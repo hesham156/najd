@@ -146,7 +146,7 @@ export default function VoiceCall({
         receiverId,
         receiverName,
         status: CallStatus.RINGING,
-        offer: offer.toJSON(),
+        offer: offer as any,
         createdAt: serverTimestamp(),
       });
 
@@ -189,7 +189,7 @@ export default function VoiceCall({
       // حفظ الـ Answer في Firestore
       const callDoc = doc(db, 'calls', callId);
       await updateDoc(callDoc, {
-        answer: answer.toJSON(),
+        answer: answer as any,
         status: CallStatus.ONGOING,
         startedAt: serverTimestamp(),
       });

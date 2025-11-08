@@ -472,7 +472,7 @@ export function canCreateChat(
     return user2.isHead && user2.role !== UserRole.CEO;
   }
   if (user2.role === UserRole.CEO) {
-    return user1.isHead && user1.role !== UserRole.CEO;
+    return user1.isHead === true;
   }
 
   // رئيس القسم يتواصل مع موظفي قسمه فقط

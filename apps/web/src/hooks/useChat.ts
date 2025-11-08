@@ -247,7 +247,7 @@ export function useChatMessages(chatId: string | null) {
   const sendMessage = useCallback(
     async (
       text: string,
-      type: MessageType = 'text',
+      type: MessageType = MessageType.TEXT,
       fileURL?: string,
       fileName?: string,
       replyTo?: { messageId: string; text: string; senderName: string }

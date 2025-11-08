@@ -379,7 +379,7 @@ export default function QuotationViewPage({ params }: { params: { id: string } }
           </div>
 
           {/* Action Buttons - No Print */}
-          {user.department === 'sales' && (
+          {user?.department === 'sales' && (
             <div className="no-print mt-6 bg-blue-50 border-2 border-blue-300 rounded-lg p-6">
               <div className="flex items-center gap-4">
                 <div className="flex-shrink-0">

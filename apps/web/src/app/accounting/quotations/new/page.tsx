@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Navbar from '@/components/Layout/Navbar';
@@ -18,7 +18,7 @@ interface QuotationItem {
   notes?: string;
 }
 
-export default function NewQuotationPage() {
+function NewQuotationPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -67,8 +67,8 @@ export default function NewQuotationPage() {
           setOrder(orderData);
           
           // Pre-fill first item based on order
-          if (orderData.products && orderData.products.length > 0) {
-            const product = orderData.products[0];
+          if ((orderData as any).products && (orderData as any).products.length > 0) {
+            const product = (orderData as any).products[0];
             setItems([{
               id: '1',
               description: product.description || 'منتج',
@@ -263,8 +263,8 @@ export default function NewQuotationPage() {
         expiryDate: expiryDate.toISOString(),
         
         // Created by
-        preparedBy: user.uid,
-        preparedByName: user.displayName,
+        preparedBy: user?.uid || '',
+        preparedByName: user?.displayName || '',
         
         // Notes and terms
         notes,
@@ -685,5 +685,17 @@ export default function NewQuotationPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function NewQuotationPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-najd-blue"></div>
+      </div>
+    }>
+      <NewQuotationPageContent />
+    </Suspense>
   );
 }

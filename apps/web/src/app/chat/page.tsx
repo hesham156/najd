@@ -63,7 +63,7 @@ export default function ChatPage() {
             id: change.doc.id,
             ...change.doc.data(),
           };
-          console.log('📞 مكالمة واردة من:', callData.callerName);
+          console.log('📞 مكالمة واردة من:', (callData as any).callerName);
           setIncomingCall(callData);
           playIncomingCallSound();
         }
@@ -354,7 +354,7 @@ function ChatWindow({
             id: change.doc.id,
             ...change.doc.data(),
           };
-          console.log('📞 مكالمة واردة في المحادثة من:', callData.callerName);
+          console.log('📞 مكالمة واردة في المحادثة من:', (callData as any).callerName);
           setIncomingCallInChat(callData);
           playIncomingCallSound();
         }
@@ -404,7 +404,7 @@ function ChatWindow({
       const audioURL = await getDownloadURL(storageRef);
 
       // إرسال كرسالة صوتية
-      await sendMessage('', 'audio', audioURL, fileName);
+      await sendMessage('', 'audio' as any, audioURL, fileName);
       playSentSound(); // تشغيل صوت الإرسال
       
       alert('تم إرسال التسجيل الصوتي! ✅');

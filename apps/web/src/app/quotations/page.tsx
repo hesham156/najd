@@ -144,7 +144,7 @@ export default function QuotationsListPage() {
             عروض الأسعار
           </h1>
           <p className="mt-2 text-gray-600">
-            {user.department === 'sales' ? 'عروض الأسعار لطلباتك' : 'جميع عروض الأسعار'}
+            {user?.department === 'sales' ? 'عروض الأسعار لطلباتك' : 'جميع عروض الأسعار'}
           </p>
         </div>
 

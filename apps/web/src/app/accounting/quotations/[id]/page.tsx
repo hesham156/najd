@@ -81,8 +81,8 @@ export default function QuotationDetailsPage({ params }: { params: { id: string 
     try {
       await updateDoc(doc(db, 'quotations', quotation.id), {
         status: 'quotation_approved',
-        approvedBy: user.uid,
-        approvedByName: user.displayName,
+        approvedBy: user?.uid || '',
+        approvedByName: user?.displayName || '',
         approvalDate: new Date().toISOString(),
         updatedAt: serverTimestamp(),
       });
@@ -131,8 +131,8 @@ export default function QuotationDetailsPage({ params }: { params: { id: string 
     try {
       await updateDoc(doc(db, 'quotations', quotation.id), {
         status: 'quotation_cancelled',
-        rejectedBy: user.uid,
-        rejectedByName: user.displayName,
+        rejectedBy: user?.uid || '',
+        rejectedByName: user?.displayName || '',
         rejectionReason: reason,
         rejectionDate: new Date().toISOString(),
         updatedAt: serverTimestamp(),
@@ -174,7 +174,7 @@ export default function QuotationDetailsPage({ params }: { params: { id: string 
       await updateDoc(doc(db, 'quotations', quotation.id), {
         status: 'quotation_sent',
         sentToClientAt: new Date().toISOString(),
-        sentBy: user.uid,
+        sentBy: user?.uid || '',
         updatedAt: serverTimestamp(),
       });
 
@@ -427,7 +427,7 @@ export default function QuotationDetailsPage({ params }: { params: { id: string 
             </div>
 
             {/* Actions for CEO */}
-            {user.role === 'ceo' && quotation.status === 'quotation_pending_approval' && (
+            {user?.role === 'ceo' && quotation.status === 'quotation_pending_approval' && (
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">إجراءات المدير</h2>
                 <div className="space-y-2">
@@ -450,7 +450,7 @@ export default function QuotationDetailsPage({ params }: { params: { id: string 
             )}
 
             {/* Actions for Accounting after CEO approval */}
-            {user.department === 'accounting' && quotation.status === 'quotation_approved' && (
+            {user?.department === 'accounting' && quotation.status === 'quotation_approved' && (
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">إجراءات الحسابات</h2>
                 <div className="space-y-2">
