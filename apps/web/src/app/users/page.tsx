@@ -12,8 +12,8 @@ import Navbar from '@/components/Layout/Navbar';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { COLLECTIONS } from '@/types/shared';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { format } from 'date-fns/format';
+import { ar } from 'date-fns/locale/ar';
 import toast from 'react-hot-toast';
 
 interface User {

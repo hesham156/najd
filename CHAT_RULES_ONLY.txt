@@ -1,0 +1,86 @@
+// ==========================
+// Chats Collection - نظام الشات الهرمي
+// ==========================
+match /chats/{chatId} {
+  // دالة للتحقق من أن المستخدم مشارك في المحادثة
+  function isParticipant() {
+    return request.auth.uid in resource.data.participants;
+  }
+  
+  // دالة للتحقق من إمكانية إنشاء محادثة بين مستخدمين
+  function canChatWith(otherUserId) {
+    let currentUser = getUserData();
+    let otherUser = get(/databases/$(database)/documents/users/$(otherUserId)).data;
+    
+    // لا يمكن للمستخدم التواصل مع نفسه
+    return request.auth.uid != otherUserId && (
+      // CEO يتواصل مع رؤساء الأقسام فقط
+      (currentUser.role == 'ceo' && otherUser.isHead == true && otherUser.role != 'ceo') ||
+      
+      // رئيس القسم يتواصل مع CEO
+      (currentUser.isHead == true && otherUser.role == 'ceo') ||
+      
+      // رئيس القسم يتواصل مع موظفي قسمه
+      (currentUser.isHead == true && otherUser.isHead == false && 
+       currentUser.department == otherUser.department) ||
+      
+      // موظف عادي يتواصل مع رئيس قسمه
+      (currentUser.isHead == false && otherUser.isHead == true && 
+       currentUser.department == otherUser.department)
+    );
+  }
+  
+  // القراءة: المستخدم يمكنه قراءة المحادثات التي هو مشارك فيها
+  allow read: if isActiveUser() && isParticipant();
+  
+  // الإنشاء: المستخدم يمكنه إنشاء محادثة مع مستخدمين مصرح لهم
+  allow create: if isActiveUser() && 
+                  request.auth.uid in request.resource.data.participants &&
+                  request.resource.data.participants.size() == 2 &&
+                  canChatWith(request.resource.data.participants[request.resource.data.participants[0] == request.auth.uid ? 1 : 0]);
+  
+  // التحديث: المستخدمون المشاركون يمكنهم تحديث المحادثة
+  allow update: if isActiveUser() && isParticipant();
+  
+  // الحذف: لا يمكن حذف المحادثات
+  allow delete: if false;
+  
+  // ==========================
+  // Messages Subcollection
+  // ==========================
+  match /messages/{messageId} {
+    // دالة للتحقق من أن المستخدم مشارك في المحادثة الأب
+    function isParticipantInParentChat() {
+      return request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+    }
+    
+    // القراءة: المستخدمون المشاركون في المحادثة فقط
+    allow read: if isActiveUser() && isParticipantInParentChat();
+    
+    // الإنشاء: المستخدمون المشاركون يمكنهم إرسال رسائل
+    allow create: if isActiveUser() && 
+                    isParticipantInParentChat() &&
+                    request.resource.data.senderId == request.auth.uid;
+    
+    // التحديث: المرسل يمكنه تحديث رسالته
+    allow update: if isActiveUser() && (
+      (resource.data.senderId == request.auth.uid) ||
+      (isParticipantInParentChat() && 
+       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'readBy', 'updatedAt']))
+    );
+    
+    // الحذف: المرسل يمكنه حذف رسالته
+    allow delete: if isActiveUser() && resource.data.senderId == request.auth.uid;
+  }
+}
+
+// ==========================
+// Typing Indicators Collection
+// ==========================
+match /typing_indicators/{indicatorId} {
+  allow read: if isActiveUser();
+  allow write: if isActiveUser() && 
+                 request.resource.data.userId == request.auth.uid;
+}
+
+

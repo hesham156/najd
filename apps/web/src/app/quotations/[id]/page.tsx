@@ -7,8 +7,8 @@ import Navbar from '@/components/Layout/Navbar';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { format } from 'date-fns/format';
+import { ar } from 'date-fns/locale/ar';
 
 const QUOTATION_STATUS_LABELS: Record<string, string> = {
   quotation_draft: 'مسودة',

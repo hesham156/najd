@@ -21,6 +21,14 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login');
+      return;
+    }
+
+    // توجيه الموظفين العاديين إلى صفحة مهامي مباشرة
+    if (user && user.department && !user.isHead && 
+        user.role !== 'ceo' && user.role !== 'sales' && 
+        user.role !== 'sales_head' && user.department !== 'accounting') {
+      router.push('/my-tasks');
     }
   }, [user, authLoading, router]);
 

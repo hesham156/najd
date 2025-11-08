@@ -52,7 +52,7 @@ export const onOrderCreated = functions.firestore
  */
 export const onOrderStatusChanged = functions.firestore
   .document('orders/{orderId}')
-  .onUpdate(async (change, context) => {
+  .onUpdate(async (change, context): Promise<any> => {
     const before = change.before.data();
     const after = change.after.data();
     const orderId = context.params.orderId;

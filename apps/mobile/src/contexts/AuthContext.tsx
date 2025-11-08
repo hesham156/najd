@@ -3,19 +3,13 @@
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import {
-  User as FirebaseUser,
-  signInWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-} from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { User, COLLECTIONS } from '@najd/shared';
 
 interface AuthContextType {
   user: User | null;
-  firebaseUser: FirebaseUser | null;
+  firebaseUser: FirebaseAuthTypes.User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -25,18 +19,21 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseAuthTypes.User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = auth().onAuthStateChanged(async (firebaseUser) => {
       setFirebaseUser(firebaseUser);
 
       if (firebaseUser) {
         try {
-          const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, firebaseUser.uid));
+          const userDoc = await firestore()
+            .collection(COLLECTIONS.USERS)
+            .doc(firebaseUser.uid)
+            .get();
           
-          if (userDoc.exists()) {
+          if (userDoc.exists) {
             const userData = userDoc.data() as User;
             setUser(userData);
           } else {
@@ -59,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await auth().signInWithEmailAndPassword(email, password);
     } catch (error) {
       console.error('Sign in error:', error);
       throw error;
@@ -68,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      await firebaseSignOut(auth);
+      await auth().signOut();
       setUser(null);
       setFirebaseUser(null);
     } catch (error) {

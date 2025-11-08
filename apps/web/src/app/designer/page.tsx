@@ -18,8 +18,8 @@ import {
 } from '@/types/shared';
 import { doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { format } from 'date-fns/format';
+import { ar } from 'date-fns/locale/ar';
 
 // دالة للحصول على نص الإجراء
 function getStatusActionLabel(status: OrderStatus): string {

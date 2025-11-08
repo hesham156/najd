@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Navbar from '@/components/Layout/Navbar';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, functions } from '@/lib/firebase';
 import {
   OrderStatus,
   ORDER_STATUS_LABELS,
@@ -21,9 +21,12 @@ import {
   getPriorityColor,
   COLLECTIONS,
 } from '@/types/shared';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { format } from 'date-fns/format';
+import { ar } from 'date-fns/locale/ar';
 import toast from 'react-hot-toast';
+import { notifyCEOOrderStatusChange, notifyCEOTaskCompleted } from '@/utils/ceoNotifications';
+import { httpsCallable } from 'firebase/functions';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 interface Order {
   id: string;
@@ -56,6 +59,14 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  
+  // لتعيين المهام
+  const [showAssignmentUI, setShowAssignmentUI] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [estimatedHours, setEstimatedHours] = useState('');
+  const [assignmentNotes, setAssignmentNotes] = useState('');
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
     if (!user || !params.id) return;
@@ -84,6 +95,30 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
     fetchOrder();
   }, [user, params.id, router]);
 
+  // جلب أعضاء الفريق (للرؤساء فقط)
+  useEffect(() => {
+    if (!user || !user.isHead) return;
+
+    const fetchTeamMembers = async () => {
+      try {
+        const q = query(
+          collection(db, 'users'),
+          where('department', '==', user.department),
+          where('isActive', '==', true)
+        );
+        const snapshot = await getDocs(q);
+        const members = snapshot.docs
+          .map(doc => ({ uid: doc.id, ...doc.data() }))
+          .filter(m => m.uid !== user.uid); // استبعاد الرئيس نفسه
+        setTeamMembers(members);
+      } catch (error) {
+        console.error('Error fetching team members:', error);
+      }
+    };
+
+    fetchTeamMembers();
+  }, [user]);
+
   const handleStatusUpdate = async (newStatus: OrderStatus, additionalData?: any) => {
     if (!order) return;
 
@@ -98,12 +133,73 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
       await updateDoc(doc(db, COLLECTIONS.ORDERS, order.id), updateData);
 
       setOrder({ ...order, status: newStatus, ...additionalData });
+      
+      // إشعار للـ CEO عند تحديثات مهمة
+      const importantStatuses = [
+        OrderStatus.PRINTING_COMPLETED,
+        OrderStatus.DESIGN_COMPLETED,
+        OrderStatus.DELIVERED,
+        OrderStatus.CANCELLED,
+        OrderStatus.PAYMENT_CONFIRMED,
+      ];
+      
+      if (importantStatuses.includes(newStatus)) {
+        await notifyCEOOrderStatusChange(
+          order.orderNumber,
+          order.customerName,
+          newStatus,
+          order.id
+        );
+      }
+      
       toast.success('تم تحديث حالة الطلب بنجاح');
     } catch (error) {
       console.error('Error updating order:', error);
       toast.error('فشل تحديث حالة الطلب');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  // تعيين المهمة لموظف
+  const handleAssignTask = async () => {
+    if (!selectedUserId) {
+      toast.error('يرجى اختيار موظف');
+      return;
+    }
+
+    setAssigning(true);
+    try {
+      // استخدام helper function بدلاً من Cloud Function
+      const { assignTask } = await import('@/utils/taskAssignment');
+      
+      console.log('🎯 تعيين مهمة:', {
+        orderId: order!.id,
+        userId: selectedUserId,
+        department: user!.department,
+        currentUser: user!.displayName,
+      });
+      
+      await assignTask({
+        orderId: order!.id,
+        userId: selectedUserId,
+        department: user!.department,
+        estimatedDuration: estimatedHours ? Number(estimatedHours) : null,
+        notes: assignmentNotes || null,
+        currentUserId: user!.uid,
+        currentUserName: user!.displayName,
+        currentUserRole: user!.role,
+      });
+
+      toast.success('تم تعيين المهمة بنجاح!');
+      
+      // إعادة تحميل الصفحة
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Error assigning task:', error);
+      toast.error(error.message || 'فشل تعيين المهمة');
+    } finally {
+      setAssigning(false);
     }
   };
 
@@ -562,6 +658,153 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
                     </button>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Task Assignment - للرؤساء فقط */}
+            {user.isHead && order && (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">
+                  تعيين المهمة 🎯
+                </h2>
+
+                {/* إذا كانت المهمة معينة */}
+                {(order as any)[`assigned${user.department.charAt(0).toUpperCase() + user.department.slice(1)}`] ? (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-2xl">👤</span>
+                      <div>
+                        <p className="font-bold text-gray-900">
+                          {(order as any)[`${user.department}Assignment`]?.userName || 'غير محدد'}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          المعين لهذه المهمة
+                        </p>
+                      </div>
+                    </div>
+
+                    {(order as any)[`${user.department}Assignment`]?.estimatedDuration && (
+                      <p className="text-sm text-gray-600 mb-2">
+                        ⏱️ الوقت المتوقع: {(order as any)[`${user.department}Assignment`].estimatedDuration} ساعة
+                      </p>
+                    )}
+
+                    {(order as any)[`${user.department}Assignment`]?.notes && (
+                      <div className="bg-white rounded p-3 mt-2">
+                        <p className="text-xs text-gray-500 mb-1">ملاحظاتك:</p>
+                        <p className="text-sm text-gray-700">
+                          {(order as any)[`${user.department}Assignment`].notes}
+                        </p>
+                      </div>
+                    )}
+
+                    {(order as any)[`${user.department}Assignment`]?.startedAt && (
+                      <div className="mt-3 pt-3 border-t">
+                        <p className="text-sm text-green-600 font-medium">
+                          ✓ بدأ العمل - {new Date((order as any)[`${user.department}Assignment`].startedAt).toLocaleDateString('ar-SA')}
+                        </p>
+                      </div>
+                    )}
+
+                    {(order as any)[`${user.department}Assignment`]?.completedAt && (
+                      <div className="mt-2">
+                        <p className="text-sm text-blue-600 font-medium">
+                          ✅ مكتمل - الوقت الفعلي: {(order as any)[`${user.department}Assignment`].actualDuration?.toFixed(2)} ساعة
+                        </p>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setShowAssignmentUI(true);
+                        setSelectedUserId('');
+                      }}
+                      className="w-full mt-4 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition"
+                    >
+                      🔄 إعادة تعيين
+                    </button>
+                  </div>
+                ) : (
+                  /* إذا لم تكن معينة */
+                  <div>
+                    {!showAssignmentUI ? (
+                      <button
+                        onClick={() => setShowAssignmentUI(true)}
+                        className="w-full px-4 py-3 bg-najd-blue text-white rounded-lg hover:bg-opacity-90 transition font-medium"
+                      >
+                        + تعيين لموظف
+                      </button>
+                    ) : (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            اختر الموظف <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={selectedUserId}
+                            onChange={(e) => setSelectedUserId(e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-najd-blue"
+                          >
+                            <option value="">اختر موظف...</option>
+                            {teamMembers.map((member) => (
+                              <option key={member.uid} value={member.uid}>
+                                {member.displayName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            الوقت المتوقع (ساعات)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={estimatedHours}
+                            onChange={(e) => setEstimatedHours(e.target.value)}
+                            placeholder="مثال: 8"
+                            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-najd-blue"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            ملاحظات (اختياري)
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={assignmentNotes}
+                            onChange={(e) => setAssignmentNotes(e.target.value)}
+                            placeholder="تعليمات خاصة، أولوية، إلخ..."
+                            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-najd-blue"
+                          />
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleAssignTask}
+                            disabled={!selectedUserId || assigning}
+                            className="flex-1 bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition disabled:opacity-50 font-medium"
+                          >
+                            {assigning ? 'جاري التعيين...' : '✓ تعيين'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowAssignmentUI(false);
+                              setSelectedUserId('');
+                              setEstimatedHours('');
+                              setAssignmentNotes('');
+                            }}
+                            className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                          >
+                            إلغاء
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

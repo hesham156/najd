@@ -310,3 +310,223 @@ export function getPriorityColor(priority: OrderPriority): string {
   }
 }
 
+// =====================================
+// Chat Types - نظام الشات الهرمي
+// =====================================
+
+export enum ChatType {
+  DIRECT = 'direct',
+  GROUP = 'group',
+}
+
+export enum MessageStatus {
+  SENT = 'sent',
+  DELIVERED = 'delivered',
+  READ = 'read',
+}
+
+export enum MessageType {
+  TEXT = 'text',
+  IMAGE = 'image',
+  FILE = 'file',
+  AUDIO = 'audio',
+  VOICE_CALL = 'voice_call',
+}
+
+export interface Chat {
+  id: string;
+  type: ChatType;
+  participants: string[];
+  participantsData: {
+    [uid: string]: {
+      uid: string;
+      displayName: string;
+      photoURL?: string;
+      role: UserRole;
+      department: Department;
+      isHead: boolean;
+    };
+  };
+  lastMessage?: {
+    text: string;
+    senderId: string;
+    senderName: string;
+    timestamp: any;
+    type: MessageType;
+  };
+  unreadCount: {
+    [uid: string]: number;
+  };
+  groupName?: string;
+  groupAdminId?: string;
+  department?: Department;
+  createdAt: any;
+  updatedAt: any;
+  createdBy: string;
+}
+
+export interface Message {
+  id: string;
+  chatId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: UserRole;
+  senderPhotoURL?: string;
+  type: MessageType;
+  text?: string;
+  fileURL?: string;
+  fileName?: string;
+  fileSize?: number;
+  status: MessageStatus;
+  readBy: string[];
+  replyTo?: {
+    messageId: string;
+    text: string;
+    senderName: string;
+  };
+  createdAt: any;
+  updatedAt?: any;
+  editedAt?: any;
+  isEdited?: boolean;
+  deletedFor?: string[];
+}
+
+export interface TypingIndicator {
+  chatId: string;
+  userId: string;
+  userName: string;
+  isTyping: boolean;
+  timestamp: any;
+}
+
+/**
+ * دالة لتحديد من يمكن للمستخدم التواصل معه
+ */
+export function getAllowedChatUsers(
+  currentUser: {
+    uid: string;
+    role: UserRole;
+    department: Department;
+    isHead: boolean;
+  },
+  allUsers: Array<{
+    uid: string;
+    role: UserRole;
+    department: Department;
+    isHead: boolean;
+    displayName: string;
+    isActive: boolean;
+  }>
+): Array<{
+  uid: string;
+  displayName: string;
+  role: UserRole;
+  department: Department;
+  isHead: boolean;
+}> {
+  const activeUsers = allUsers.filter(
+    (u) => u.isActive && u.uid !== currentUser.uid
+  );
+
+  // CEO: يتواصل مع جميع رؤساء الأقسام
+  if (currentUser.role === UserRole.CEO) {
+    return activeUsers.filter((u) => u.isHead && u.role !== UserRole.CEO);
+  }
+
+  // رئيس القسم: يتواصل مع CEO + جميع موظفي قسمه
+  if (currentUser.isHead) {
+    return activeUsers.filter(
+      (u) =>
+        u.role === UserRole.CEO ||
+        (u.department === currentUser.department && !u.isHead)
+    );
+  }
+
+  // موظف عادي: يتواصل مع رئيس قسمه فقط
+  return activeUsers.filter(
+    (u) => u.department === currentUser.department && u.isHead
+  );
+}
+
+/**
+ * دالة للتحقق من إمكانية إنشاء محادثة بين مستخدمين
+ */
+export function canCreateChat(
+  user1: {
+    uid: string;
+    role: UserRole;
+    department: Department;
+    isHead: boolean;
+  },
+  user2: {
+    uid: string;
+    role: UserRole;
+    department: Department;
+    isHead: boolean;
+  }
+): boolean {
+  if (user1.uid === user2.uid) return false;
+
+  // CEO يتواصل مع رؤساء الأقسام فقط
+  if (user1.role === UserRole.CEO) {
+    return user2.isHead && user2.role !== UserRole.CEO;
+  }
+  if (user2.role === UserRole.CEO) {
+    return user1.isHead && user1.role !== UserRole.CEO;
+  }
+
+  // رئيس القسم يتواصل مع موظفي قسمه فقط
+  if (user1.isHead && !user2.isHead) {
+    return user1.department === user2.department;
+  }
+  if (user2.isHead && !user1.isHead) {
+    return user2.department === user1.department;
+  }
+
+  return false;
+}
+
+/**
+ * دالة لإنشاء معرف محادثة فريد بين مستخدمين
+ */
+export function createChatId(uid1: string, uid2: string): string {
+  return [uid1, uid2].sort().join('_');
+}
+
+// Voice Call Types
+export enum CallStatus {
+  INITIATING = 'initiating',
+  RINGING = 'ringing',
+  ONGOING = 'ongoing',
+  ENDED = 'ended',
+  MISSED = 'missed',
+  REJECTED = 'rejected',
+  FAILED = 'failed',
+}
+
+export interface VoiceCall {
+  id: string;
+  chatId: string;
+  callerId: string;
+  callerName: string;
+  receiverId: string;
+  receiverName: string;
+  status: CallStatus;
+  startedAt?: any;
+  endedAt?: any;
+  duration?: number;
+  createdAt: any;
+  offer?: any;
+  answer?: any;
+  iceCandidates?: any[];
+}
+
+export interface AudioRecording {
+  id: string;
+  url: string;
+  duration: number;
+  size: number;
+  mimeType: string;
+  waveform?: number[];
+}
+

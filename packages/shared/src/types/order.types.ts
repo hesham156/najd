@@ -76,6 +76,29 @@ export interface Material {
   notes?: string;
 }
 
+// خامة مستخدمة من المخزون في طلب
+export interface OrderInventoryMaterial {
+  id: string;
+  inventoryItemId: string;     // معرف العنصر في المخزون
+  itemName: string;            // اسم الخامة
+  category: string;            // نوع الخامة
+  department: string;          // القسم (printing, design, etc.)
+  quantityUsed: number;        // الكمية المستخدمة
+  unit: string;                // وحدة القياس
+  notes?: string;
+}
+
+// حالة كل مادة على حدة (لتتبع التقدم)
+export interface MaterialStatus {
+  type: MaterialType;
+  status: 'pending' | 'in_progress' | 'ready';
+  assignedTo?: string;          // معرف المستخدم المسؤول
+  assignedToName?: string;       // اسم المستخدم المسؤول
+  startedAt?: string;            // تاريخ البدء
+  completedAt?: string;          // تاريخ الاكتمال
+  notes?: string;                // ملاحظات إضافية
+}
+
 export interface AttachedFile {
   id: string;
   name: string;
@@ -129,6 +152,12 @@ export interface Order {
   // المواد المطلوبة
   materials: Material[];
   
+  // حالة كل مادة (لتتبع التقدم)
+  materialsStatus?: MaterialStatus[];
+  
+  // الخامات المستخدمة من المخزون
+  inventoryMaterials?: OrderInventoryMaterial[];
+  
   // الملفات المرفقة
   files: AttachedFile[];
   
@@ -137,10 +166,24 @@ export interface Order {
   internalNotes?: string;  // ملاحظات داخلية للفريق
   
   // المعلومات المالية
-  estimatedCost?: number;
-  finalCost?: number;
+  estimatedCost?: number;              // التسعيرة الأولية من المبيعات
+  accountingReviewedCost?: number;     // التسعيرة بعد مراجعة الحسابات المبدئية
+  finalCost?: number;                  // التسعيرة النهائية
+  costVariancePercentage?: number;     // نسبة الفرق بين الأولية والنهائية
   paidAmount?: number;
   paymentStatus: PaymentStatus;
+  paymentRecords?: Array<{             // سجل الدفعات
+    id: string;
+    amount: number;
+    paymentMethod: string;
+    paymentDate: string;
+    reference?: string;
+    receivedBy: string;
+    receivedByName: string;
+    notes?: string;
+    receiptNumber?: string;
+    createdAt: string;
+  }>;
   
   // عروض الأسعار والفواتير المرتبطة
   isQuotation?: boolean;              // هل هو طلب عرض سعر

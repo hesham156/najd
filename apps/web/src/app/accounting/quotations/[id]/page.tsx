@@ -8,8 +8,8 @@ import { doc, getDoc, updateDoc, serverTimestamp, addDoc, collection } from 'fir
 import { db } from '@/lib/firebase';
 import { COLLECTIONS } from '@/types/shared';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { format } from 'date-fns/format';
+import { ar } from 'date-fns/locale/ar';
 
 const QUOTATION_STATUS_LABELS: Record<string, string> = {
   quotation_draft: 'مسودة',

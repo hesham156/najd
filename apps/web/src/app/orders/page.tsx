@@ -17,8 +17,8 @@ import {
   getStatusColor,
   getPriorityColor,
 } from '@/types/shared';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { format } from 'date-fns/format';
+import { ar } from 'date-fns/locale/ar';
 
 export default function OrdersPage() {
   const router = useRouter();

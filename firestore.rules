@@ -56,8 +56,8 @@ service cloud.firestore {
     // Users Collection
     // ==========================
     match /users/{userId} {
-      // القراءة: المستخدم يمكنه قراءة بياناته، أو CEO يمكنه قراءة الجميع
-      allow read: if isOwner(userId) || isCEO();
+      // القراءة: أي مستخدم نشط يمكنه قراءة بيانات المستخدمين (للشات وإدارة الفريق)
+      allow read: if isActiveUser();
       
       // الإنشاء: 
       // - السماح بإنشاء مستخدم إذا كان المستخدم الذي يتم إنشاؤه هو نفس المستخدم المسجل (self-registration)
@@ -107,16 +107,47 @@ service cloud.firestore {
         ))
       );
       
-      // الإنشاء: المبيعات فقط
-      allow create: if isSales() && 
+      // الإنشاء: المبيعات ورؤساء أقسام المبيعات
+      allow create: if isActiveUser() && 
+                      (isSales() || (hasDepartment('sales') && isHead())) &&
                       request.resource.data.createdBy == request.auth.uid &&
                       request.resource.data.status in ['draft', 'pending_ceo_review'];
       
       // التحديث:
-      // - CEO: يمكنه تحديث أي طلب
-      // - رؤساء الأقسام: يمكنهم تحديث أي طلب
-      // - جميع الأقسام: يمكنهم تحديث الطلبات المرتبطة بهم
-      allow update: if isActiveUser();
+      // صلاحيات محددة حسب الدور والحالة
+      allow update: if isActiveUser() && (
+        // CEO: يمكنه تحديث أي طلب
+        isCEO() ||
+        
+        // رؤساء الأقسام: يمكنهم تحديث أي طلب
+        isHead() ||
+        
+        // المبيعات: يمكنه تحديث طلباته في حالات معينة
+        (isSales() && 
+         resource.data.createdBy == request.auth.uid &&
+         resource.data.status in ['draft', 'returned_to_sales'] &&
+         request.resource.data.diff(resource.data).affectedKeys().hasAny(['customerName', 'customerPhone', 'customerEmail', 'customerAddress', 'printType', 'quantity', 'needsDesign', 'designDescription', 'materials', 'notes', 'estimatedCost', 'priority', 'requestedDeliveryDate', 'files', 'comments', 'updatedAt'])) ||
+        
+        // التصميم: يمكنه تحديث الطلبات في مراحل التصميم فقط
+        (hasDepartment('design') && 
+         resource.data.status in ['pending_design', 'in_design', 'design_review', 'design_completed'] &&
+         request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'assignedToDesign', 'designDescription', 'timeline', 'comments', 'updatedAt'])) ||
+        
+        // الطباعة: يمكنه تحديث الطلبات في مراحل الطباعة فقط
+        (hasDepartment('printing') && 
+         resource.data.status in ['pending_printing', 'in_printing', 'printing_completed'] &&
+         request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'assignedToPrinting', 'timeline', 'comments', 'updatedAt'])) ||
+        
+        // الحسابات: يمكنه تحديث التسعيرة والدفعات
+        (hasDepartment('accounting') && 
+         (resource.data.status in ['printing_completed', 'pending_payment', 'payment_confirmed'] ||
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['estimatedCost', 'finalCost', 'paidAmount', 'paymentStatus', 'paymentRecords', 'accountingReviewedCost', 'costVariancePercentage', 'timeline', 'comments', 'updatedAt', 'status']))) ||
+        
+        // الإرسال: يمكنه تحديث حالة المواد والإرسال
+        (hasDepartment('dispatch') && 
+         resource.data.status in ['pending_materials', 'materials_in_progress', 'materials_ready', 'ready_for_dispatch', 'in_dispatch', 'delivered'] &&
+         request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'materialsStatus', 'assignedToDispatch', 'actualDeliveryDate', 'timeline', 'comments', 'updatedAt']))
+      );
       
       // الحذف: CEO فقط
       allow delete: if isCEO();
@@ -218,9 +249,12 @@ service cloud.firestore {
       // القراءة: المستخدمين المسجلين فقط
       allow read: if isSignedIn();
       
-      // الكتابة: السماح للمستخدمين المسجلين بتحديث العدادات
-      // يتم استخدام Transactions لضمان عدم التعارض
-      allow write: if isSignedIn();
+      // الكتابة: 
+      // - عداد الطلبات: المبيعات ورؤساء أقسام المبيعات يمكنهم تحديثه
+      // - باقي العدادات: عبر Cloud Functions فقط
+      allow write: if isActiveUser() && (
+        (counterId == 'orders' && (isSales() || (hasDepartment('sales') && isHead())))
+      );
     }
     
     // ==========================
@@ -232,6 +266,224 @@ service cloud.firestore {
       
       // الكتابة: عبر Cloud Functions فقط
       allow write: if false;
+    }
+    
+    // ==========================
+    // Chats Collection - نظام الشات الهرمي
+    // ==========================
+    match /chats/{chatId} {
+      // صلاحيات مؤقتة مفتوحة للاختبار - سيتم تضييقها لاحقاً
+      allow read, write: if isSignedIn();
+      
+      // ==========================
+      // Messages Subcollection
+      // ==========================
+      match /messages/{messageId} {
+        // دالة للتحقق من أن المستخدم مشارك في المحادثة الأب
+        function isParticipantInParentChat() {
+          return request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        }
+        
+        // القراءة: المستخدمون المشاركون في المحادثة فقط
+        allow read: if isActiveUser() && isParticipantInParentChat();
+        
+        // الإنشاء: المستخدمون المشاركون يمكنهم إرسال رسائل
+        allow create: if isActiveUser() && 
+                        isParticipantInParentChat() &&
+                        request.resource.data.senderId == request.auth.uid;
+        
+        // التحديث: المرسل يمكنه تحديث رسالته (تعديل، تحديث حالة القراءة)
+        // والمستقبل يمكنه تحديث حالة القراءة
+        allow update: if isActiveUser() && (
+          (resource.data.senderId == request.auth.uid) ||
+          (isParticipantInParentChat() && 
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'readBy', 'updatedAt']))
+        );
+        
+        // الحذف: المرسل يمكنه حذف رسالته
+        allow delete: if isActiveUser() && resource.data.senderId == request.auth.uid;
+      }
+    }
+    
+    // ==========================
+    // Typing Indicators Collection
+    // ==========================
+    match /typing_indicators/{indicatorId} {
+      // القراءة: المستخدمون النشطون فقط (real-time updates)
+      allow read: if isActiveUser();
+      
+      // الكتابة: المستخدم يمكنه تحديث حالة الكتابة الخاصة به
+      allow write: if isActiveUser() && 
+                     request.resource.data.userId == request.auth.uid;
+    }
+    
+    // ==========================
+    // Voice Calls Collection
+    // ==========================
+    match /calls/{callId} {
+      // دالة للتحقق من أن المستخدم مشارك في المكالمة
+      function isCallParticipant() {
+        return request.auth.uid == resource.data.callerId || 
+               request.auth.uid == resource.data.receiverId;
+      }
+      
+      // القراءة: المشاركون في المكالمة فقط
+      allow read: if isActiveUser() && isCallParticipant();
+      
+      // الإنشاء: المستخدم يمكنه بدء مكالمة
+      allow create: if isActiveUser() && 
+                      request.resource.data.callerId == request.auth.uid;
+      
+      // التحديث: المشاركون يمكنهم تحديث حالة المكالمة
+      allow update: if isActiveUser() && isCallParticipant();
+      
+      // الحذف: ممنوع
+      allow delete: if false;
+    }
+    
+    // ==========================
+    // Inventory Collection - المخزون
+    // ==========================
+    match /inventory/{itemId} {
+      // القراءة: جميع المستخدمين النشطين يمكنهم قراءة المخزون
+      // (لأن الأقسام تحتاج لرؤية مخزون الأقسام الأخرى للتنسيق)
+      allow read: if isActiveUser();
+      
+      // الإنشاء: موظفو القسم يمكنهم إضافة مواد
+      allow create: if isActiveUser() && 
+                      request.resource.data.createdBy == request.auth.uid &&
+                      hasDepartment(request.resource.data.department);
+      
+      // التحديث: 
+      // - موظفو القسم أو CEO يمكنهم تحديث أي شيء
+      // - المبيعات يمكنهم تقليل الكمية فقط (لإنشاء الطلبات)
+      allow update: if isActiveUser() && (
+        isCEO() ||
+        hasDepartment(resource.data.department) ||
+        (isSales() && 
+         request.resource.data.quantity < resource.data.quantity &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quantity', 'status', 'updatedAt', 'lastModifiedBy', 'lastModifiedAt']))
+      );
+      
+      // الحذف: رئيس القسم أو CEO
+      allow delete: if isActiveUser() && (
+        isCEO() ||
+        (hasDepartment(resource.data.department) && isHead())
+      );
+    }
+    
+    // ==========================
+    // Material Requests Collection - طلبات الخامات
+    // ==========================
+    match /material_requests/{requestId} {
+      // القراءة: القسم الطالب ورؤساء الأقسام والـ CEO
+      allow read: if isActiveUser() && (
+        isCEO() ||
+        (hasDepartment(resource.data.department)) ||
+        (isHead())
+      );
+      
+      // الإنشاء: موظفو الأقسام
+      allow create: if isActiveUser() && 
+                      request.resource.data.requestedBy == request.auth.uid &&
+                      hasDepartment(request.resource.data.department);
+      
+      // التحديث: رئيس القسم أو CEO (للموافقة/الرفض)
+      allow update: if isActiveUser() && (
+        isCEO() ||
+        (hasDepartment(resource.data.department) && isHead())
+      );
+      
+      // الحذف: من أنشأه أو رئيس القسم
+      allow delete: if isActiveUser() && (
+        resource.data.requestedBy == request.auth.uid ||
+        (hasDepartment(resource.data.department) && isHead()) ||
+        isCEO()
+      );
+    }
+    
+    // ==========================
+    // Inventory Transactions Collection - حركات المخزون
+    // ==========================
+    match /inventory_transactions/{transactionId} {
+      // القراءة: القسم المعني
+      allow read: if isActiveUser();
+      
+      // الإنشاء: موظفو الأقسام (تلقائي عند التحديث)
+      allow create: if isActiveUser() &&
+                      request.resource.data.performedBy == request.auth.uid;
+      
+      // التحديث والحذف: ممنوع (سجل دائم)
+      allow update, delete: if false;
+    }
+    
+    // ==========================
+    // Purchase Requests Collection - طلبات الشراء
+    // ==========================
+    match /purchase_requests/{requestId} {
+      // القراءة: المبيعات (من أنشأه)، رؤساء الأقسام، والـ CEO
+      allow read: if isActiveUser() && (
+        isCEO() ||
+        isHead() ||
+        resource.data.requestedBy == request.auth.uid ||
+        hasDepartment(resource.data.department)
+      );
+      
+      // الإنشاء: المبيعات فقط (لطلب خامات لطلبات العملاء)
+      allow create: if isActiveUser() && 
+                      isSales() &&
+                      request.resource.data.requestedBy == request.auth.uid &&
+                      request.resource.data.department == 'sales';
+      
+      // التحديث: CEO (للموافقة/الرفض/تحديث الحالة)
+      allow update: if isActiveUser() && isCEO();
+      
+      // الحذف: من أنشأه (قبل الموافقة فقط) أو CEO
+      allow delete: if isActiveUser() && (
+        (resource.data.requestedBy == request.auth.uid && resource.data.status == 'pending') ||
+        isCEO()
+      );
+    }
+    
+    // ==========================
+    // Customers Collection - العملاء
+    // ==========================
+    match /customers/{customerId} {
+      // القراءة: 
+      // - CEO: يمكنه رؤية جميع العملاء
+      // - مندوب المبيعات: يمكنه رؤية عملاءه فقط
+      // - رؤساء الأقسام: يمكنهم رؤية جميع العملاء
+      allow read: if isActiveUser() && (
+        isCEO() ||
+        isHead() ||
+        (isSales() && resource.data.createdBy == request.auth.uid)
+      );
+      
+      // الإنشاء: المبيعات يمكنهم إضافة عملاء جدد
+      allow create: if isActiveUser() && 
+                      isSales() &&
+                      request.resource.data.createdBy == request.auth.uid;
+      
+      // التحديث: من أضافه أو CEO أو رؤساء الأقسام
+      allow update: if isActiveUser() && (
+        isCEO() ||
+        isHead() ||
+        (isSales() && resource.data.createdBy == request.auth.uid)
+      );
+      
+      // الحذف: من أضافه أو CEO
+      allow delete: if isActiveUser() && (
+        isCEO() ||
+        (isSales() && resource.data.createdBy == request.auth.uid)
+      );
+    }
+    
+    // ==========================
+    // Counters Collection (تحديث)
+    // ==========================
+    match /counters/purchase_requests {
+      allow read: if isSignedIn();
+      allow write: if isActiveUser() && isSales();
     }
     
     // رفض الوصول لأي شيء آخر

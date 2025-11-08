@@ -4,11 +4,11 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Navbar from '@/components/Layout/Navbar';
-import { collection, addDoc, serverTimestamp, doc, runTransaction } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, runTransaction, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import toast from 'react-hot-toast';
@@ -22,13 +22,20 @@ import {
   PaymentStatus,
   COLLECTIONS,
   STORAGE_PATHS,
+  Customer,
 } from '@/types/shared';
+import InventoryMaterialsSelector, { OrderInventoryMaterial } from '@/components/Orders/InventoryMaterialsSelector';
+import PurchaseRequestModal from '@/components/Orders/PurchaseRequestModal';
+import { decreaseInventory, checkMaterialsAvailability } from '@/utils/inventoryHelpers';
 
 export default function NewOrderPage() {
   const router = useRouter();
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('new');
+  const [isNewCustomer, setIsNewCustomer] = useState(true);
 
   // بيانات الطلب
   const [customerName, setCustomerName] = useState('');
@@ -58,6 +65,10 @@ export default function NewOrderPage() {
   ]);
 
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [inventoryMaterials, setInventoryMaterials] = useState<OrderInventoryMaterial[]>([]);
+  const [showPurchaseRequestModal, setShowPurchaseRequestModal] = useState(false);
+  const [missingMaterials, setMissingMaterials] = useState<any[]>([]);
+  const [pendingOrderData, setPendingOrderData] = useState<any>(null);
   const [notes, setNotes] = useState('');
   const [priority, setPriority] = useState<OrderPriority>(OrderPriority.MEDIUM);
   const [estimatedCost, setEstimatedCost] = useState<number>(0); // التسعيرة الأولية من المبيعات
@@ -67,6 +78,56 @@ export default function NewOrderPage() {
 
   const [files, setFiles] = useState<File[]>([]);
   const [requestedDeliveryDate, setRequestedDeliveryDate] = useState('');
+
+  // جلب قائمة العملاء
+  useEffect(() => {
+    if (!user) return;
+
+    const customersRef = collection(db, 'customers');
+    const customersQuery = query(
+      customersRef,
+      where('createdBy', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(
+      customersQuery,
+      (snapshot) => {
+        const customersData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Customer[];
+        setCustomers(customersData);
+      },
+      (error) => {
+        console.error('Error fetching customers:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // تحديث بيانات العميل عند الاختيار
+  const handleCustomerSelect = (customerId: string) => {
+    setSelectedCustomerId(customerId);
+    
+    if (customerId === 'new') {
+      setIsNewCustomer(true);
+      setCustomerName('');
+      setCustomerPhone('');
+      setCustomerEmail('');
+      setCustomerAddress('');
+    } else {
+      setIsNewCustomer(false);
+      const selectedCustomer = customers.find((c) => c.id === customerId);
+      if (selectedCustomer) {
+        setCustomerName(selectedCustomer.name);
+        setCustomerPhone(selectedCustomer.phone);
+        setCustomerEmail(selectedCustomer.email || '');
+        setCustomerAddress(selectedCustomer.address || '');
+      }
+    }
+  };
 
   // إضافة منتج
   const addProduct = () => {
@@ -180,10 +241,24 @@ export default function NewOrderPage() {
     setLoading(true);
 
     try {
-      // 1. توليد رقم الطلب
+      // 1. التحقق من توفر الخامات من المخزون
+      if (inventoryMaterials.length > 0) {
+        const availabilityCheck = await checkMaterialsAvailability(inventoryMaterials);
+        
+        if (!availabilityCheck.available) {
+          // حفظ بيانات الطلب مؤقتاً
+          setPendingOrderData({ submitForReview });
+          setMissingMaterials(availabilityCheck.missingMaterials);
+          setShowPurchaseRequestModal(true);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 2. توليد رقم الطلب
       const orderNumber = await generateOrderNumber();
 
-      // 2. رفع الملفات (إن وجدت)
+      // 3. رفع الملفات (إن وجدت)
       const uploadedFiles: AttachedFile[] = [];
 
       for (const file of files) {
@@ -205,16 +280,38 @@ export default function NewOrderPage() {
         });
       }
 
-      // 3. إنشاء الطلب
+      // 4. إنشاء الطلب
       // حساب الكمية الإجمالية ونوع الطباعة الأساسي
       const totalQuantity = products.reduce((sum, p) => sum + p.quantity, 0);
       const primaryPrintType = products[0]?.printType || PrintType.DIGITAL;
       const needsDesign = products.some((p) => p.needsDesign);
 
+      // 4. إضافة عميل جديد إذا لزم الأمر
+      let savedCustomerId = selectedCustomerId !== 'new' ? selectedCustomerId : null;
+      
+      if (isNewCustomer && customerName && customerPhone) {
+        try {
+          const newCustomerRef = await addDoc(collection(db, 'customers'), {
+            name: customerName,
+            phone: customerPhone,
+            email: customerEmail || null,
+            address: customerAddress || null,
+            createdBy: user.uid,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          savedCustomerId = newCustomerRef.id;
+        } catch (error) {
+          console.error('Error saving customer:', error);
+          // نستمر حتى لو فشل حفظ العميل
+        }
+      }
+
       const orderData = {
         orderNumber,
         status: submitForReview ? OrderStatus.PENDING_CEO_REVIEW : OrderStatus.DRAFT,
         priority,
+        customerId: savedCustomerId, // ربط الطلب بالعميل
         customerName,
         customerPhone,
         customerEmail: customerEmail || null,
@@ -237,6 +334,7 @@ export default function NewOrderPage() {
           description: p.description,
         })),
         materials,
+        inventoryMaterials: inventoryMaterials.length > 0 ? inventoryMaterials : null,
         files: uploadedFiles,
         notes,
         estimatedCost: estimatedCost || null, // التسعيرة الأولية من المبيعات
@@ -254,7 +352,23 @@ export default function NewOrderPage() {
         updatedAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, COLLECTIONS.ORDERS), orderData);
+      const orderRef = await addDoc(collection(db, COLLECTIONS.ORDERS), orderData);
+
+      // 6. تقليل المخزون إذا كانت هناك خامات محددة
+      if (inventoryMaterials.length > 0) {
+        const decreaseResult = await decreaseInventory(
+          inventoryMaterials,
+          orderRef.id,
+          orderNumber,
+          user.uid,
+          user.displayName || 'مجهول'
+        );
+
+        if (!decreaseResult.success) {
+          console.error('Inventory decrease errors:', decreaseResult.errors);
+          toast.error('تم إنشاء الطلب ولكن فشل تحديث بعض الخامات');
+        }
+      }
 
       toast.success(submitForReview ? 'تم إرسال الطلب للمراجعة بنجاح' : 'تم حفظ الطلب كمسودة');
       router.push('/orders');
@@ -289,6 +403,27 @@ export default function NewOrderPage() {
             {/* معلومات العميل */}
             <section>
               <h2 className="text-xl font-bold text-gray-900 mb-4">معلومات العميل</h2>
+              
+              {/* اختيار العميل */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  اختر العميل
+                </label>
+                <select
+                  value={selectedCustomerId}
+                  onChange={(e) => handleCustomerSelect(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-najd-blue focus:border-najd-blue"
+                >
+                  <option value="new">+ عميل جديد</option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name} - {customer.phone}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* بيانات العميل */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -299,7 +434,8 @@ export default function NewOrderPage() {
                     required
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-najd-blue focus:border-najd-blue"
+                    disabled={!isNewCustomer}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-najd-blue focus:border-najd-blue disabled:bg-gray-100"
                   />
                 </div>
 
@@ -312,7 +448,8 @@ export default function NewOrderPage() {
                     required
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-najd-blue focus:border-najd-blue"
+                    disabled={!isNewCustomer}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-najd-blue focus:border-najd-blue disabled:bg-gray-100"
                   />
                 </div>
 
@@ -324,7 +461,8 @@ export default function NewOrderPage() {
                     type="email"
                     value={customerEmail}
                     onChange={(e) => setCustomerEmail(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-najd-blue focus:border-najd-blue"
+                    disabled={!isNewCustomer}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-najd-blue focus:border-najd-blue disabled:bg-gray-100"
                   />
                 </div>
 
@@ -336,10 +474,17 @@ export default function NewOrderPage() {
                     type="text"
                     value={customerAddress}
                     onChange={(e) => setCustomerAddress(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-najd-blue focus:border-najd-blue"
+                    disabled={!isNewCustomer}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-najd-blue focus:border-najd-blue disabled:bg-gray-100"
                   />
                 </div>
               </div>
+
+              {isNewCustomer && (
+                <p className="mt-2 text-sm text-gray-600">
+                  💡 سيتم حفظ هذا العميل تلقائياً لاستخدامه في الطلبات القادمة
+                </p>
+              )}
             </section>
 
             {/* المنتجات */}
@@ -575,6 +720,20 @@ export default function NewOrderPage() {
               </div>
             </section>
 
+            {/* الخامات من المخزون */}
+            <section>
+              <div className="border-t border-gray-200 pt-6 mb-6">
+                <InventoryMaterialsSelector
+                  selectedMaterials={inventoryMaterials}
+                  onChange={setInventoryMaterials}
+                  onMissingMaterials={(missing) => {
+                    setMissingMaterials(missing);
+                    setShowPurchaseRequestModal(true);
+                  }}
+                />
+              </div>
+            </section>
+
             {/* الملفات */}
             <section>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -628,6 +787,26 @@ export default function NewOrderPage() {
           </form>
         </div>
       </main>
+
+      {/* نافذة طلب الشراء للخامات الناقصة */}
+      {showPurchaseRequestModal && (
+        <PurchaseRequestModal
+          missingMaterials={missingMaterials}
+          relatedOrderNumber={undefined}
+          relatedOrderId={undefined}
+          onClose={() => {
+            setShowPurchaseRequestModal(false);
+            setMissingMaterials([]);
+            setPendingOrderData(null);
+          }}
+          onSuccess={() => {
+            setShowPurchaseRequestModal(false);
+            setMissingMaterials([]);
+            setPendingOrderData(null);
+            toast.success('تم إنشاء طلب الشراء بنجاح. يمكنك الآن إنشاء الطلب بدون هذه الخامات أو الانتظار حتى تتوفر.');
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -18,6 +18,7 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import QuotationsScreen from '../screens/QuotationsScreen';
 import UsersScreen from '../screens/UsersScreen';
+import ChatScreen from '../screens/ChatScreen';
 
 // Icons (using text emojis for simplicity)
 const TabIcon = ({ icon, focused }: { icon: string; focused: boolean }) => (
@@ -62,6 +63,15 @@ function HomeTabs() {
       />
 
       <Tab.Screen
+        name="Chat"
+        component={ChatScreen}
+        options={{
+          tabBarLabel: 'المحادثات',
+          tabBarIcon: ({ focused }) => <TabIcon icon="💬" focused={focused} />,
+        }}
+      />
+
+      <Tab.Screen
         name="Notifications"
         component={NotificationsScreen}
         options={{
@@ -90,6 +100,7 @@ export type RootStackParamList = {
   NewOrder: undefined;
   Quotations: undefined;
   Users: undefined;
+  Chat: undefined;
 };
 
 export default function AppNavigator() {

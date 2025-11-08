@@ -19,8 +19,8 @@ import {
 } from '@/types/shared';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { format } from 'date-fns/format';
+import { ar } from 'date-fns/locale/ar';
 import toast from 'react-hot-toast';
 
 // تعريف الأعمدة
@@ -140,7 +140,7 @@ export default function PrintingPage() {
       <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
                 🖨️ لوحة قسم الطباعة
@@ -150,20 +150,29 @@ export default function PrintingPage() {
               </p>
             </div>
 
-            {/* Stats Summary */}
-            <div className="flex gap-4">
-              <div className="bg-orange-50 px-4 py-2 rounded-lg border border-orange-200">
-                <p className="text-xs text-orange-800">في الانتظار</p>
-                <p className="text-2xl font-bold text-orange-600">{stats.pending}</p>
-              </div>
-              <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
-                <p className="text-xs text-blue-800">جاري الطباعة</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.inProgress}</p>
-              </div>
-              <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
-                <p className="text-xs text-green-800">مكتملة</p>
-                <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
-              </div>
+            {/* زر إدارة المخزون */}
+            <button
+              onClick={() => router.push('/printing/inventory')}
+              className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-medium shadow-md flex items-center gap-2"
+            >
+              <span className="text-xl">📦</span>
+              إدارة المخزون
+            </button>
+          </div>
+
+          {/* Stats Summary */}
+          <div className="flex justify-end gap-4">
+            <div className="bg-orange-50 px-4 py-2 rounded-lg border border-orange-200">
+              <p className="text-xs text-orange-800">في الانتظار</p>
+              <p className="text-2xl font-bold text-orange-600">{stats.pending}</p>
+            </div>
+            <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+              <p className="text-xs text-blue-800">جاري الطباعة</p>
+              <p className="text-2xl font-bold text-blue-600">{stats.inProgress}</p>
+            </div>
+            <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
+              <p className="text-xs text-green-800">مكتملة</p>
+              <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
             </div>
           </div>
         </div>
@@ -240,7 +249,7 @@ function OrderCard({
   onStatusUpdate: (orderId: string, newStatus: OrderStatus) => void;
   onViewDetails: () => void;
   isUpdating: boolean;
-}) {
+}): JSX.Element {
   const getNextStatus = (currentStatus: OrderStatus): OrderStatus | null => {
     switch (currentStatus) {
       case OrderStatus.PENDING_PRINTING:
